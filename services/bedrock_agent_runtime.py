@@ -16,26 +16,22 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
-        # Debug log to inspect the full API response structure
-        print("Full API response:", response)  # This will show if 'result' and other fields are present
-
-        # Extract 'result' as the main message
-        output_text = response.get("result", "").strip()
-
-        # Log if 'result' is empty or contains unexpected content
-        if not output_text:
-            print("Warning: 'result' field is empty or not as expected.")
-
-        # Remove placeholder markers like %[1]%, %[2]% if present
-        output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
-
-        # Collect citations from 'completion' events if they exist
+        # Initialize output_text and citations to build the response
+        output_text = ""
         citations = []
-        for event in response.get("completion", []):
+        trace = response.get("trace", {})  # Initialize trace to an empty dictionary by default
+
+        # Process the EventStream in 'completion' to extract response data
+        for event in response['completion']:
+            # Decode each event chunk as it arrives
             chunk = event.get("chunk")
+            if chunk and "bytes" in chunk:
+                # Decode the response text and append it to output_text
+                output_text += chunk["bytes"].decode().strip()
+            
+            # Collect any citations if they exist in the chunk
             if chunk and "attribution" in chunk:
                 for citation in chunk["attribution"].get("citations", []):
-                    # Validate citation structure before accessing
                     if (
                         isinstance(citation, dict) and
                         "location" in citation and 
@@ -43,10 +39,13 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                         "uri" in citation["location"]["s3Location"]
                     ):
                         uri = citation["location"]["s3Location"]["uri"]
-                        if uri not in citations:  # Avoid duplicates
+                        if uri not in citations:  # Avoid duplicate URIs
                             citations.append(uri)
 
-        # Append formatted citations if they exist
+        # Clean up any placeholder markers like %[1]% if present
+        output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
+
+        # Append formatted citations at the end of output_text if they exist
         if citations:
             citation_texts = "\n\nCitations:\n" + "\n".join([f"[{i+1}] {uri}" for i, uri in enumerate(citations)])
             output_text += citation_texts
@@ -55,7 +54,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         print("Final output_text:", output_text)
 
     except ClientError as e:
-        # Handle client errors and provide a user-friendly message
+        # Provide a user-friendly message in case of an error
         output_text = "An error occurred while trying to invoke the agent."
         print(f"ClientError: {e}")
 
@@ -63,5 +62,5 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
     return {
         "output_text": output_text,
         "citations": citations,  # Always include citations, even if empty
-        "trace": response.get("trace", {})  # Ensure trace key is always present
+        "trace": trace  # Ensure trace key is always present
     }
