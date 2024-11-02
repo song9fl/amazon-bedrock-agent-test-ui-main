@@ -15,6 +15,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
+        # Initialize variables to hold output text and citation information
         output_text = ""
         citations = []
         trace = {}
@@ -45,29 +46,29 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                             trace[mapped_trace_type] = []
                         trace[mapped_trace_type].append(event["trace"]["trace"][trace_type])
 
-        # Replace placeholder citations with hyperlinked markers and construct citation text
+        # Prepare citation markers and links
         citation_text = "\n"  # Collect citation links to append to the output
         for i, citation in enumerate(citations, start=1):
             citation_marker = f"[{i}]"
-            hyperlink_marker = f"[{i}](#{i})"  # Markdown-style hyperlink within the text
-            output_text = output_text.replace(f"%[{i}]%", hyperlink_marker)
+            hyperlink_marker = f"[{i}]({citation['location']['s3Location']['uri']})"  # Markdown-style hyperlink
+            output_text = output_text.replace(f"%[{i}]%", hyperlink_marker)  # Replace placeholders
             
-            # Construct citation text with hyperlink to the citation's S3 location or relevant URI
+            # Append citation in Markdown format
             if "location" in citation and "s3Location" in citation["location"]:
                 citation_url = citation["location"]["s3Location"]["uri"]
-                citation_text += f"[{i}]: {citation_url}\n"
+                citation_text += f"{citation_marker}: {citation_url}\n"
             else:
-                citation_text += f"[{i}]: [Citation not available]\n"
+                citation_text += f"{citation_marker}: [Citation not available]\n"
 
-        # Append all citations at the end of output_text as hyperlinks
+        # Append all citations at the end of output_text
         output_text += "\n" + citation_text
 
     except ClientError as e:
         print(f"An error occurred: {e}")
         raise
 
+    # Return only the formatted output text without extra metadata like instruction
     return {
         "output_text": output_text,
-        "citations": citations,
-        "trace": trace
+        "trace": trace  # Keep trace for debugging if needed; can be omitted if not needed
     }
