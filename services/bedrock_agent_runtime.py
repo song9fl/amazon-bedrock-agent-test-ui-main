@@ -15,9 +15,9 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
-        # Initialize variables to hold output text and citation information
+        # Initialize variables to hold output text, citation information, and trace data
         output_text = ""
-        citations = []
+        citations = []  # Ensure citations is always an empty list if not populated
         trace = {}
 
         has_guardrail_trace = False
@@ -69,8 +69,9 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         print(f"An error occurred: {e}")
         raise
 
-    # Return only the formatted output text without extra metadata like instruction
+    # Return formatted output text, citations list (even if empty), and trace
     return {
         "output_text": output_text,
-        "trace": trace  # Keep trace for debugging if needed; can be omitted if not needed
+        "citations": citations,  # Ensure citations is returned as an empty list if none found
+        "trace": trace
     }
