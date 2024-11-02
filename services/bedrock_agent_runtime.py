@@ -19,6 +19,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         # Extract the chatbot's main message from 'result'
         output_text = response.get("result", "").strip()
         citations = []
+        trace = response.get("trace", {})  # Initialize trace to an empty dictionary by default
 
         # Remove inline placeholder markers like %[1]%, %[2]% from the main message
         output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
@@ -48,9 +49,11 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         # Handle client errors gracefully
         output_text = "An error occurred while trying to invoke the agent."
         print(f"ClientError: {e}")
+        trace = {}  # Ensure trace is included in case of an error
 
-    # Return the structured response with ensured 'citations' key
+    # Return the structured response with ensured 'trace' and 'citations' keys
     return {
         "output_text": output_text,
         "citations": citations,  # Always include citations, even if empty
+        "trace": trace  # Ensure trace key is always present
     }
