@@ -29,13 +29,14 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                 # Decode and accumulate the text chunks for the main response
                 output_text += chunk["bytes"].decode().strip()
 
-        # Attempt to parse output_text as JSON and extract only the 'result' field
+        # Parse output_text as JSON to retrieve only the 'result' field
         try:
             response_json = json.loads(output_text)
             output_text = response_json.get("result", "").strip()  # Extract main response text
         except json.JSONDecodeError:
-            print("Warning: output_text is not in JSON format.")
-        
+            # Provide feedback if parsing fails
+            print("Error: Unable to parse output_text as JSON.")
+
         # Clean up placeholder markers like %[1]% if present
         output_text = re.sub(r'%\[\d+\]%', '', output_text)
 
