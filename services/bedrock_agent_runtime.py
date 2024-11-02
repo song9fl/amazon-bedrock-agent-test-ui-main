@@ -16,35 +16,27 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
-        # Initialize variables to collect result text and citations
+        # Initialize variables to collect result text, citations, and trace data
         output_text = ""
         citations = []
-        trace = response.get("trace", {})  # Ensure trace is initialized
+        trace = {"preProcessingTrace": [], "orchestrationTrace": [], "postProcessingTrace": []}
 
-        # Process each chunk in the EventStream, focusing on 'result'
+        # Process each chunk in the EventStream
         for event in response['completion']:
             chunk = event.get("chunk")
             if chunk and "bytes" in chunk:
-                # Decode each chunk as text
                 decoded_text = chunk["bytes"].decode().strip()
                 
-                # Use regex to extract only the 'result' field content
+                # Extract only the 'result' field content
                 match = re.search(r'"result":\s*"(.*?)"\s*}', decoded_text)
                 if match:
-                    # Add extracted result text to output_text
                     output_text += match.group(1)
                 else:
                     print("Warning: 'result' field not found in chunk:", decoded_text)
 
-        # Clean up any placeholder markers like %[1]% if present
-        output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
-
-        # Collect citations from the completion stream if available
-        for event in response.get("completion", []):
-            chunk = event.get("chunk")
+            # Collect citations from 'attribution' in each chunk
             if chunk and "attribution" in chunk:
                 for citation in chunk["attribution"].get("citations", []):
-                    # Ensure valid citation structure before accessing
                     if (
                         isinstance(citation, dict) and
                         "location" in citation and 
@@ -52,10 +44,19 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                         "uri" in citation["location"]["s3Location"]
                     ):
                         uri = citation["location"]["s3Location"]["uri"]
-                        if uri not in citations:  # Avoid duplicates
+                        if uri not in citations:
                             citations.append(uri)
 
-        # Format and append citations if they exist
+            # Collect trace information if available
+            if "trace" in event:
+                for trace_type in ["preProcessingTrace", "orchestrationTrace", "postProcessingTrace"]:
+                    if trace_type in event["trace"]["trace"]:
+                        trace[trace_type].append(event["trace"]["trace"][trace_type])
+
+        # Remove placeholder markers like %[1]% if present
+        output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
+
+        # Append formatted citations if they exist
         if citations:
             citation_texts = "\n\nCitations:\n" + "\n".join([f"[{i+1}] {uri}" for i, uri in enumerate(citations)])
             output_text += citation_texts
@@ -64,11 +65,9 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         print("Final output_text:", output_text)
 
     except ClientError as e:
-        # Provide an error message if invocation fails
         output_text = "An error occurred while trying to invoke the agent."
         print(f"ClientError: {e}")
 
-    # Return the structured response with both 'trace' and 'citations' ensured
     return {
         "output_text": output_text,
         "citations": citations,
