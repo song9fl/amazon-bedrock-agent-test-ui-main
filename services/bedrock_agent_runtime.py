@@ -16,22 +16,20 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
-        # Initialize output_text and citations to build the response
-        output_text = ""
+        # Extract 'result' as the main message
+        output_text = response.get("result", "").strip()
         citations = []
-        trace = response.get("trace", {})  # Initialize trace to an empty dictionary by default
+        trace = response.get("trace", {})  # Ensure trace is always initialized
 
-        # Process the EventStream in 'completion' to extract response data
-        for event in response['completion']:
-            # Decode each event chunk as it arrives
+        # Clean up placeholder markers like %[1]%, %[2]% if present in 'result'
+        output_text = re.sub(r'%\[\d+\]%', '', output_text)
+
+        # If citations exist in 'completion' events, extract them
+        for event in response.get("completion", []):
             chunk = event.get("chunk")
-            if chunk and "bytes" in chunk:
-                # Decode the response text and append it to output_text
-                output_text += chunk["bytes"].decode().strip()
-            
-            # Collect any citations if they exist in the chunk
             if chunk and "attribution" in chunk:
                 for citation in chunk["attribution"].get("citations", []):
+                    # Ensure valid citation structure before accessing
                     if (
                         isinstance(citation, dict) and
                         "location" in citation and 
@@ -39,16 +37,13 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                         "uri" in citation["location"]["s3Location"]
                     ):
                         uri = citation["location"]["s3Location"]["uri"]
-                        if uri not in citations:  # Avoid duplicate URIs
+                        if uri not in citations:  # Avoid duplicates
                             citations.append(uri)
 
-        # Clean up any placeholder markers like %[1]% if present
-        output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
-
-        # Append formatted citations at the end of output_text if they exist
+        # Format and append citations if they exist
         if citations:
             citation_texts = "\n\nCitations:\n" + "\n".join([f"[{i+1}] {uri}" for i, uri in enumerate(citations)])
-            output_text += citation_texts
+            output_text += citation_texts.strip()
 
         # Log final output_text for verification
         print("Final output_text:", output_text)
@@ -61,6 +56,6 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
     # Return the structured response with ensured 'trace' and 'citations' keys
     return {
         "output_text": output_text,
-        "citations": citations,  # Always include citations, even if empty
-        "trace": trace  # Ensure trace key is always present
+        "citations": citations,
+        "trace": trace
     }
