@@ -15,39 +15,34 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
-        # Extract only the main 'result' field for output
+        # Extract the main 'result' field for output, which is the bot's main response
         output_text = response.get("result", "")
         citations = []
         trace = {}
 
-        # Clean up the output text by removing inline citation markers
-        output_text = (output_text
-                       .replace("%[1]%", "")
-                       .replace("%[2]%", "")
-                       .replace("%[3]%", "")
-                       .replace("%[4]%", "")
-                       .replace("%[5]%", "")
-                       .strip())
+        # Only process 'completion' events if 'output_text' contains meaningful text
+        if output_text:
+            # Clean up any inline citation markers in the main response
+            output_text = output_text.replace("%[1]%", "").replace("%[2]%", "").replace("%[3]%", "").replace("%[4]%", "").replace("%[5]%", "").strip()
+        
+            # Process each event in completion to gather citations
+            for event in response.get("completion", []):
+                chunk = event.get("chunk")
+                if chunk and "attribution" in chunk:
+                    # Collect citations separately
+                    citations.extend(chunk["attribution"]["citations"])
 
-        # Process each event in completion to gather citations
-        for event in response.get("completion", []):
-            chunk = event.get("chunk")
-            if chunk:
-                attribution = chunk.get("attribution")
-                if attribution and "citations" in attribution:
-                    citations.extend(attribution["citations"])
+                # Collect trace information if needed for debugging
+                event_trace = event.get("trace")
+                if event_trace:
+                    for trace_type in ["preProcessingTrace", "orchestrationTrace", "postProcessingTrace"]:
+                        trace_data = event_trace["trace"].get(trace_type)
+                        if trace_data:
+                            if trace_type not in trace:
+                                trace[trace_type] = []
+                            trace[trace_type].append(trace_data)
 
-            # Collect trace information if available
-            event_trace = event.get("trace")
-            if event_trace:
-                for trace_type in ["preProcessingTrace", "orchestrationTrace", "postProcessingTrace"]:
-                    trace_data = event_trace["trace"].get(trace_type)
-                    if trace_data:
-                        if trace_type not in trace:
-                            trace[trace_type] = []
-                        trace[trace_type].append(trace_data)
-
-        # Append citations as a separate section at the end of output_text
+        # Format and append citations at the end of output_text if they exist
         if citations:
             citation_texts = "\n\nCitations:\n"
             for i, citation in enumerate(citations, start=1):
@@ -62,7 +57,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
 
     # Return the structured response
     return {
-        "output_text": output_text,  # Main response text
-        "citations": citations,      # List of extracted citations
-        "trace": trace               # Trace information for debugging
+        "output_text": output_text,  # Main response text with appended citations if any
+        "citations": citations,
+        "trace": trace
     }
