@@ -1,6 +1,7 @@
 import boto3
 from botocore.exceptions import ClientError
 import re
+import json
 
 def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
     try:
@@ -27,11 +28,22 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             if chunk and "bytes" in chunk:
                 # Decode and accumulate the text chunks for the main response
                 output_text += chunk["bytes"].decode().strip()
-            
-            # Collect citations from the chunk if they exist
+
+        # Attempt to parse output_text as JSON and extract only the 'result' field
+        try:
+            response_json = json.loads(output_text)
+            output_text = response_json.get("result", "").strip()  # Extract main response text
+        except json.JSONDecodeError:
+            print("Warning: output_text is not in JSON format.")
+        
+        # Clean up placeholder markers like %[1]% if present
+        output_text = re.sub(r'%\[\d+\]%', '', output_text)
+
+        # Collect citations from the completion stream if available
+        for event in response.get("completion", []):
+            chunk = event.get("chunk")
             if chunk and "attribution" in chunk:
                 for citation in chunk["attribution"].get("citations", []):
-                    # Check for the correct structure before accessing
                     if (
                         isinstance(citation, dict) and
                         "location" in citation and 
@@ -39,16 +51,13 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                         "uri" in citation["location"]["s3Location"]
                     ):
                         uri = citation["location"]["s3Location"]["uri"]
-                        if uri not in citations:  # Avoid duplicate entries
+                        if uri not in citations:  # Avoid duplicates
                             citations.append(uri)
-
-        # Clean up placeholder markers like %[1]% if present
-        output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
 
         # Append formatted citations at the end of output_text if any exist
         if citations:
             citation_texts = "\n\nCitations:\n" + "\n".join([f"[{i+1}] {uri}" for i, uri in enumerate(citations)])
-            output_text += citation_texts.strip()
+            output_text += citation_texts
 
         # Log final output_text for verification
         print("Final output_text:", output_text)
