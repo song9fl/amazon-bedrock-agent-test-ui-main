@@ -50,15 +50,17 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         citation_text = "\n"  # Collect citation links to append to the output
         for i, citation in enumerate(citations, start=1):
             citation_marker = f"[{i}]"
-            hyperlink_marker = f"[{i}]({citation['location']['s3Location']['uri']})"  # Markdown-style hyperlink
-            output_text = output_text.replace(f"%[{i}]%", hyperlink_marker)  # Replace placeholders
-            
-            # Append citation in Markdown format
+            # Check if 'location' and 's3Location' keys are present in the citation
             if "location" in citation and "s3Location" in citation["location"]:
                 citation_url = citation["location"]["s3Location"]["uri"]
+                hyperlink_marker = f"[{i}]({citation_url})"  # Markdown-style hyperlink
                 citation_text += f"{citation_marker}: {citation_url}\n"
             else:
+                hyperlink_marker = f"[{i}](#)"  # Placeholder link if citation location is missing
                 citation_text += f"{citation_marker}: [Citation not available]\n"
+            
+            # Replace placeholders in the output_text
+            output_text = output_text.replace(f"%[{i}]%", hyperlink_marker)
 
         # Append all citations at the end of output_text
         output_text += "\n" + citation_text
