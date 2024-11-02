@@ -16,20 +16,26 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             inputText=prompt,
         )
 
-        # Extract the chatbot's main message from 'result'
-        output_text = response.get("result", "").strip()
-        citations = []
-        trace = response.get("trace", {})  # Initialize trace to an empty dictionary by default
+        # Debug log to inspect the full API response structure
+        print("Full API response:", response)  # This will show if 'result' and other fields are present
 
-        # Remove inline placeholder markers like %[1]%, %[2]% from the main message
+        # Extract 'result' as the main message
+        output_text = response.get("result", "").strip()
+
+        # Log if 'result' is empty or contains unexpected content
+        if not output_text:
+            print("Warning: 'result' field is empty or not as expected.")
+
+        # Remove placeholder markers like %[1]%, %[2]% if present
         output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
 
-        # Process 'completion' events to gather citations
+        # Collect citations from 'completion' events if they exist
+        citations = []
         for event in response.get("completion", []):
             chunk = event.get("chunk")
             if chunk and "attribution" in chunk:
                 for citation in chunk["attribution"].get("citations", []):
-                    # Ensure citation structure is valid before accessing
+                    # Validate citation structure before accessing
                     if (
                         isinstance(citation, dict) and
                         "location" in citation and 
@@ -37,23 +43,25 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                         "uri" in citation["location"]["s3Location"]
                     ):
                         uri = citation["location"]["s3Location"]["uri"]
-                        if uri not in citations:  # Avoid duplicate URIs
+                        if uri not in citations:  # Avoid duplicates
                             citations.append(uri)
 
-        # Append formatted citations at the end of output_text if citations exist
+        # Append formatted citations if they exist
         if citations:
             citation_texts = "\n\nCitations:\n" + "\n".join([f"[{i+1}] {uri}" for i, uri in enumerate(citations)])
             output_text += citation_texts
 
+        # Log final output_text for verification
+        print("Final output_text:", output_text)
+
     except ClientError as e:
-        # Handle client errors gracefully
+        # Handle client errors and provide a user-friendly message
         output_text = "An error occurred while trying to invoke the agent."
         print(f"ClientError: {e}")
-        trace = {}  # Ensure trace is included in case of an error
 
     # Return the structured response with ensured 'trace' and 'citations' keys
     return {
         "output_text": output_text,
         "citations": citations,  # Always include citations, even if empty
-        "trace": trace  # Ensure trace key is always present
+        "trace": response.get("trace", {})  # Ensure trace key is always present
     }
