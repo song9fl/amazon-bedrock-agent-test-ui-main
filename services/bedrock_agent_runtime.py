@@ -44,6 +44,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
             chunk = event.get("chunk")
             if chunk and "attribution" in chunk:
                 for citation in chunk["attribution"].get("citations", []):
+                    # Ensure valid citation structure before accessing
                     if (
                         isinstance(citation, dict) and
                         "location" in citation and 
@@ -54,7 +55,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
                         if uri not in citations:  # Avoid duplicates
                             citations.append(uri)
 
-        # Append formatted citations at the end of output_text if any exist
+        # Format and append citations if they exist
         if citations:
             citation_texts = "\n\nCitations:\n" + "\n".join([f"[{i+1}] {uri}" for i, uri in enumerate(citations)])
             output_text += citation_texts
@@ -67,7 +68,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         output_text = "An error occurred while trying to invoke the agent."
         print(f"ClientError: {e}")
 
-    # Return output with both 'trace' and 'citations' keys ensured
+    # Return the structured response with both 'trace' and 'citations' ensured
     return {
         "output_text": output_text,
         "citations": citations,
