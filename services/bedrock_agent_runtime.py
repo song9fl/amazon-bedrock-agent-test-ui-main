@@ -1,7 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
 import re
-import json
 
 def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
     try:
@@ -20,25 +19,27 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         # Initialize variables to collect result text and citations
         output_text = ""
         citations = []
-        trace = response.get("trace", {})  # Initialize trace
+        trace = response.get("trace", {})  # Ensure trace is initialized
 
         # Process each chunk in the EventStream, focusing on 'result'
         for event in response['completion']:
             chunk = event.get("chunk")
             if chunk and "bytes" in chunk:
-                # Decode and parse as JSON to isolate 'result' only
+                # Decode each chunk as text
                 decoded_text = chunk["bytes"].decode().strip()
-                try:
-                    # Parse each chunk as JSON and accumulate only the 'result' field
-                    chunk_json = json.loads(decoded_text)
-                    output_text += chunk_json.get("result", "")
-                except json.JSONDecodeError:
-                    print("Error: Unable to parse chunk as JSON:", decoded_text)
+                
+                # Use regex to extract only the 'result' field content
+                match = re.search(r'"result":\s*"(.*?)"\s*}', decoded_text)
+                if match:
+                    # Add extracted result text to output_text
+                    output_text += match.group(1)
+                else:
+                    print("Warning: 'result' field not found in chunk:", decoded_text)
 
-        # Clean up placeholder markers like %[1]% if present
+        # Clean up any placeholder markers like %[1]% if present
         output_text = re.sub(r'%\[\d+\]%', '', output_text).strip()
 
-        # Collect citations if available in each chunk's attribution
+        # Collect citations from the completion stream if available
         for event in response.get("completion", []):
             chunk = event.get("chunk")
             if chunk and "attribution" in chunk:
@@ -66,7 +67,7 @@ def invoke_agent(agent_id, agent_alias_id, session_id, prompt):
         output_text = "An error occurred while trying to invoke the agent."
         print(f"ClientError: {e}")
 
-    # Return the structured response with both 'trace' and 'citations' ensured
+    # Return output with both 'trace' and 'citations' keys ensured
     return {
         "output_text": output_text,
         "citations": citations,
