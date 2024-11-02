@@ -47,7 +47,7 @@ if prompt := st.chat_input():
             st.session_state.session_id,
             prompt
         )
-        output_text = response["output_text"]
+        output_text = response["result"]
 
         # Add citations
         if len(response["citations"]) > 0:
