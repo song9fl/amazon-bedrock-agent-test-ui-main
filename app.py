@@ -79,6 +79,7 @@ trace_type_headers = {
 trace_info_types = ["invocationInput", "modelInvocationInput", "modelInvocationOutput", "observation", "rationale"]
 
 # Sidebar section for trace
+'''
 with st.sidebar:
     st.title("Trace")
 
